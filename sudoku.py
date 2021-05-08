@@ -20,7 +20,7 @@ INCRCT_COLOR = (0, 0, 0)
 INCRCT_POS = (40, 560)
 
 FONT_SIZE = 40
-SYSTEM_FONT = "arial" #"comicsans"
+SYSTEM_FONT = "comicsans"
 
 BOX_BOARDER_WIDTH = 4
 DRAFT_COLOR = (128, 128, 128)
@@ -30,7 +30,7 @@ SELECTED_COLOR = (255, 0, 0)
 PROGRESS_COLOR = (0, 255, 0)
 DRAFT_SHIFT = 5
 
-SOLVE_PAUSE_TIME = 8
+SOLVE_PAUSE_TIME = 10
 
 END_GAME_DELAY = 5000
 RESULT_COLOR = (0, 0, 0)
@@ -248,7 +248,7 @@ class Board(object):
         Requires: 0 <= pos[0] <= self.width
                   0 <= pos[1]
         '''
-        if pos[1] <= self.height:
+        if 0 <= pos[1] <= self.height:
             return (int(pos[1] // self.box_dim), int(pos[0] // self.box_dim))
         return None
 
@@ -328,6 +328,7 @@ class Board(object):
         Clears the graphic for the selection of a box on win
 
         Effects: mutates self, win
+                 print to pygame window
 
         redraw_selecr: Board Window -> None
         '''
@@ -336,13 +337,19 @@ class Board(object):
             self.selected = None
             self.boxes[row][col].selected = False
             pygame.draw.rect(win, BG_COLOR, (0, 0, SCREEN_WIDTH, SCREEN_WIDTH), 0)
-            self.draw(win)
+            self.draw_lines(win)         
+            for i in range(rows):
+                for j in range(cols):
+                    self.boxes[i][j].draw_num_only(win)
+            pygame.display.update()
+
 
     def visualize_solve(self, win):
         '''
         Draws the solving process of the sudoku board on win
 
         Effects: mutates self, win
+                 print to pygame window
 
         visualize_solve: Board Window -> None
         '''
@@ -427,6 +434,25 @@ class Box(object):
             pygame.draw.rect(win, SELECTED_COLOR, 
                              (self.x , self.y, self.side, self.side), 
                              BOX_BOARDER_WIDTH)
+
+    def draw_num_only(self, win):
+        '''
+        Draws the box and its number only
+
+        Effects: may mutate win
+
+        draw: Board Window -> None
+        '''
+        font = pygame.font.SysFont(SYSTEM_FONT, FONT_SIZE)
+
+        if self.num != 0:
+            render_color = VALUE_COLOR
+            if self.fixed:
+                render_color = FIXED_COLOR
+            num = font.render(str(self.num), 1, render_color)
+            win.blit(num, (self.x + (self.side / 2 - num.get_width() / 2), 
+                           self.y + (self.side / 2 - num.get_height() / 2)))
+
     
     def draw_solve(self, win, backtrack):
         '''
@@ -466,6 +492,7 @@ def draw_window(win, bo, time, incorrect):
         fillings on win
 
     Effects: mutates win
+             print to pygame window
 
     draw_window: Window Board Nat Nat -> None
     '''
@@ -482,12 +509,15 @@ def draw_window(win, bo, time, incorrect):
 
     bo.draw(win)
 
+    pygame.display.update()
+
 def draw_game_result(win, time, incorrect):
     '''
     Draws the time it took to finished the game, the number of incorrect
         fillings and the follow up options on win
 
     Effects: mutates win
+             print to pygame window
 
     draw_game_result: Window Nat Nat -> None
     '''
@@ -503,6 +533,8 @@ def draw_game_result(win, time, incorrect):
 
     text = font.render("Press any key to start a new game", 1, RESULT_COLOR)
     win.blit(text, (SCREEN_WIDTH / 2 - text.get_width() / 2, MSG_Y))
+
+    pygame.display.update()
 
 def main():
     '''
@@ -521,6 +553,7 @@ def main():
         start = time.time()
         incorrect = 0
 
+        solve_started = False
         rnd = True
         while rnd:
             play_time = round(time.time() - start)
@@ -530,7 +563,11 @@ def main():
                 if event.type == pygame.QUIT:
                     rnd = False
                     game = False
-                elif event.type == pygame.KEYDOWN:
+
+                if solve_started:
+                    continue
+                
+                if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_1 or event.key == pygame.K_KP1:
                         key = 1
                     elif event.key == pygame.K_2 or event.key == pygame.K_KP2:
@@ -554,6 +591,7 @@ def main():
                         bo.clear_draft()
                         key = None
                     elif event.key == pygame.K_SPACE:
+                        solve_started = True
                         bo.redraw_select(win)
                         bo.visualize_solve(win)
                         key = None
@@ -565,7 +603,8 @@ def main():
                         elif set_result and bo.is_completed():
                             rnd = False
                         key = None
-                elif event.type == pygame.MOUSEBUTTONDOWN:
+
+                if event.type == pygame.MOUSEBUTTONDOWN:
                     mouse_pos = pygame.mouse.get_pos()
                     selected_box = bo.mouse_selection(mouse_pos)
                     if selected_box:
@@ -576,12 +615,10 @@ def main():
                 bo.set_draft(key)
                     
             draw_window(win, bo, play_time, incorrect)
-            pygame.display.update()
         
         if game:
             pygame.time.delay(END_GAME_DELAY)
             draw_game_result(win, play_time, incorrect)
-            pygame.display.update()
             
             another_one = True
             while another_one:
