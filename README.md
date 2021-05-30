@@ -1,6 +1,5 @@
 # Sudoku-Game
 ## Instructions
----
 1. Install all the packages from requirements.txt
 2. Run sudoku.py and then have fun!!!
 
@@ -14,7 +13,6 @@ Here is a list of possible options:
   * You can press 'Space' to see the process of solving the board (do not press any key during the solving process)
   
 ## Adjustments
----
 ### sudoku.py
 * SOLVE_PAUSE_TIME is how long each step of the solving process will show
   * The higher the longer
@@ -25,14 +23,9 @@ the documentation of dukusan (https://pypi.org/project/dokusan/)
   * Basically, the higher the harder
   
 ## Other Notes
----
 * Functions in solver.py can be used on sudoku boards in the form of a nested list, but they are not used in sudoku.py
-* There is a sudoku.exe file in the _dist_ folder that you can play without setting up an environment for Python
-  * For some reason, I can only use the font in the Windows system when packaging the game (_arial_ is used), so sorry for
-  the not so good-looking font
 
 ## Credit
----
 * I learned the structure of this game from a Youtube channel called _Tech With Tim_ (https://www.youtube.com/channel/UC4JX40jDee_tINbkjycV4Sg),
 and I changed some of the implementation of the class and added the feature that allows user to play continuously and 
 with a different board each time
