@@ -19,13 +19,13 @@ Here is a list of possible options:
 
 ### generate.py
 * SUDOKU_DIFFICULTY is the average rank of the board, you can see a more detailed explanation from
-the documentation of dukusan (https://pypi.org/project/dokusan/)
+the documentation of [dukusan](https://pypi.org/project/dokusan/)
   * Basically, the higher the harder
   
 ## Other Notes
 * Functions in solver.py can be used on sudoku boards in the form of a nested list, but they are not used in sudoku.py
 
 ## Credit
-* I learned the structure of this game from a Youtube channel called _Tech With Tim_ (https://www.youtube.com/channel/UC4JX40jDee_tINbkjycV4Sg),
+* I learned the structure of this game from a Youtube channel called [_Tech With Tim_](https://www.youtube.com/channel/UC4JX40jDee_tINbkjycV4Sg),
 and I changed some of the implementation of the class and added the feature that allows user to play continuously and 
 with a different board each time
