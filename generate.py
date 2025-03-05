@@ -1,43 +1,43 @@
 """This module provides functions for generating Sudoku boards with configurable difficulty."""
 
 from typing import List
-import numpy as np
-from dokusan import generators, stats
-from solver import solve
+import random
+from sudoku import Sudoku
 
-# Difficulty levels (higher number = harder puzzle)
-DIFFICULTY_EASY = 50
-DIFFICULTY_MEDIUM = 100
-DIFFICULTY_HARD = 150
-DIFFICULTY_EXPERT = 200
+# Difficulty levels (0.0 = easiest, 1.0 = hardest)
+DIFFICULTY_EASY = 0.3
+DIFFICULTY_MEDIUM = 0.5
+DIFFICULTY_HARD = 0.7
+DIFFICULTY_EXPERT = 0.9
 
-def generate_board(difficulty: int = DIFFICULTY_MEDIUM) -> np.ndarray:
+def generate_board(difficulty: float = DIFFICULTY_MEDIUM) -> List[List[int]]:
     """
-    Generate a Sudoku board with the specified difficulty level.
+    Generate a valid and solvable Sudoku board with the specified difficulty level.
     
     Args:
-        difficulty: The difficulty level of the puzzle (higher = harder).
-                   Default is DIFFICULTY_MEDIUM (100).
+        difficulty: The difficulty level of the puzzle (0.0-1.0, where 1.0 is hardest).
+                   Default is DIFFICULTY_MEDIUM (0.5).
     
     Returns:
-        A 9x9 numpy array representing the Sudoku board, where empty cells are 0.
-    
+        A 9x9 list of lists representing the Sudoku board, where empty cells are 0.
+        
     Raises:
-        ValueError: If difficulty is less than 0.
+        ValueError: If difficulty is not between 0.0 and 1.0.
     """
-    if difficulty < 0:
-        raise ValueError("Difficulty must be a non-negative number")
+    if not 0.0 <= difficulty <= 1.0:
+        raise ValueError("Difficulty must be between 0.0 and 1.0")
     
-    while True:
-        board = generators.random_sudoku(avg_rank=difficulty)
-        board_str = str(board)
-        board_list = [int(digit) for digit in board_str]
-        board_array = np.array(board_list).reshape(9, 9)
-        
-        # Make a copy to verify solvability
-        board_copy = board_array.copy()
-        if solve(board_copy):
-            # Board is solvable, return it
-            return board_array
-        
-        # If not solvable, continue loop to generate a new board
+    # Add some randomness to the seed to ensure different boards
+    random.seed()
+    seed = random.randint(1, 1000000)
+    print(f"Generating board with seed {seed} and difficulty {difficulty}")
+    
+    # Generate puzzle with specified difficulty
+    puzzle = Sudoku(3, seed=seed).difficulty(difficulty)  # 3x3 blocks = 9x9 grid
+    
+    # Convert puzzle to our format (list of lists with 0 for empty cells)
+    board = []
+    for row in puzzle.board:
+        board.append([int(cell) if cell is not None else 0 for cell in row])
+    
+    return board
