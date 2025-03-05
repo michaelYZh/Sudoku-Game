@@ -1,5 +1,17 @@
-.idea
-__pycache__
-build
-dist
-sudoku.spec
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE
+.idea/
+.vscode/
+
+# Environment
+venv/
+env/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
