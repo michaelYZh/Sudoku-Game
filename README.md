@@ -1,31 +1,77 @@
-# Sudoku-Game
-## Instructions
-1. Install all the packages from requirements.txt
-2. Run sudoku.py and then have fun!!!
+# Sudoku Game
 
-Here is a list of possible options:
-  * Select the box you want to enter a number in. The box will have a red boarder if selected
-  * Type in any number from the keyboard, and the number will be saved as a draft for the spot
-  * Press 'Backspace' or 'Delete' to clear the draft in the box
-  * If you are certain about your answer, press 'Enter'
-    * If your answer is correct, the draft number is placed in the board
-    * If not, the box is cleared, and the number of mistakes in the bottom left corner will increase by 1
-  * You can press 'Space' to see the process of solving the board (do not press any key during the solving process)
-  
-## Adjustments
-### sudoku.py
-* SOLVE_PAUSE_TIME is how long each step of the solving process will show
-  * The higher the longer
+A modern, feature-rich Sudoku game with an optimized solver and clean Python implementation.
 
-### generate.py
-* SUDOKU_DIFFICULTY is the average rank of the board, you can see a more detailed explanation from
-the documentation of [dukusan](https://pypi.org/project/dokusan/)
-  * Basically, the higher the harder
-  
-## Other Notes
-* Functions in solver.py can be used on sudoku boards in the form of a nested list, but they are not used in sudoku.py
+## Features
 
-## Credit
-* I learned the structure of this game from a Youtube channel called [_Tech With Tim_](https://www.youtube.com/channel/UC4JX40jDee_tINbkjycV4Sg),
-and I changed some of the implementation of the class and added the feature that allows user to play continuously and 
-with a different board each time
+- 🎮 Clean and intuitive GUI
+- 🎯 Multiple difficulty levels (Easy, Medium, Hard, Expert)
+- ⚡ Optimized solver with backtracking, forward checking, and heuristics
+- 📝 Draft mode for number candidates
+- ⏱️ Timer and mistake counter
+- 🎨 Modern UI with clear visual feedback
+- ⌨️ Keyboard shortcuts for quick actions
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/Sudoku-Game.git
+cd Sudoku-Game
+```
+
+2. Create a virtual environment (recommended):
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+Run the game:
+```bash
+python sudoku.py
+```
+
+### Controls
+
+- **Mouse Click**: Select a cell
+- **Number Keys (1-9)**: Add/remove draft numbers
+- **Enter**: Place the selected draft number
+- **Backspace**: Clear the selected cell
+- **Space**: Auto-solve the puzzle
+
+### Game Rules
+
+1. Fill the 9x9 grid with numbers 1-9
+2. Each row, column, and 3x3 box must contain all numbers 1-9 without repetition
+3. Initial numbers cannot be changed
+4. Use draft mode to mark potential numbers
+5. Try to complete the puzzle with as few mistakes as possible
+
+## Project Structure
+
+- `sudoku.py`: Main game module with GUI implementation
+- `solver.py`: Optimized Sudoku solver with multiple strategies
+- `generate.py`: Puzzle generator with configurable difficulty
+- `config.py`: Game configuration and constants
+
+## Technical Details
+
+The solver uses three optimization techniques:
+1. Backtracking: Systematic search for solutions
+2. Forward Checking: Early detection of invalid states
+3. Heuristics: Smart cell and value selection
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

@@ -1,71 +1,236 @@
-## This module provides functions that solve a sudoku board
+## This module provides functions that solve a sudoku board using optimized algorithms
+## including backtracking, forward checking, and heuristics
 
-## The following applies to all functions:
-## Requires: bo is valid sudoku board (9x9 grid)
+from typing import List, Tuple, Optional, Set
+import random
+from dataclasses import dataclass
+from collections import defaultdict
 
-def find_empty(bo):
-    '''
-    Returns the position of the first empty element in bo
+@dataclass
+class CellOptions:
+    """Represents the valid options for a cell and its degree (number of empty cells in same row/col/box)"""
+    options: Set[int]
+    degree: int = 0
 
-    find_empty: (listof (listof Nat)) -> (anyof (tupleof Nat Nat) None)
-
-    Time: O(1) since there are always 81 elements in bo (9x9 sudoku board)
-    '''
-    for i in range(len(bo)):
-        for j in range(len(bo[0])):
-            if bo[i][j] == 0:
-                return (i, j)
-
-def valid(bo, num, pos):
-    '''
-    Determines if bo is a valid sudoku board or not when inserting num at pos
-
-    valid: (listof (listof Nat)) Nat (tupleof Nat Nat) -> Bool
-    Requires: pos is valid position in bo
-
-    Time: O(1) since length of bo and length of elements of bo are always 9
-    '''
-    ## check row
-    for i in range(len(bo[0])):
-        if bo[pos[0]][i] == num and pos[1] != i:
-            return False
+class SudokuSolver:
+    def __init__(self, board: List[List[int]]):
+        self.board = board
+        self.options = [[CellOptions(set()) for _ in range(9)] for _ in range(9)]
+        self._initialize_options()
     
-    ## check column 
-    for i in range(len(bo)):
-        if bo[i][pos[1]] == num and pos[0] != i:
-            return False
-
-    box_cow = pos[1] // 3
-    box_row = pos[0] // 3
-
-    ## check the box containing pos
-    for i in range(box_row * 3, box_row * 3 + 3):
-        for j in range(box_cow * 3, box_cow * 3 + 3):
-            if bo[i][j] == num and (i, j) != pos:
+    def _initialize_options(self) -> None:
+        """Initialize valid options for each empty cell"""
+        for i in range(9):
+            for j in range(9):
+                if self.board[i][j] == 0:
+                    self.options[i][j].options = self._get_valid_options(i, j)
+                    self.options[i][j].degree = self._calculate_degree(i, j)
+    
+    def _get_valid_options(self, row: int, col: int) -> Set[int]:
+        """Get all valid numbers that can be placed in the given cell"""
+        valid_nums = set(range(1, 10))
+        
+        # Check row
+        for j in range(9):
+            if self.board[row][j] in valid_nums:
+                valid_nums.remove(self.board[row][j])
+        
+        # Check column
+        for i in range(9):
+            if self.board[i][col] in valid_nums:
+                valid_nums.remove(self.board[i][col])
+        
+        # Check box
+        box_row, box_col = row // 3 * 3, col // 3 * 3
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                if self.board[i][j] in valid_nums:
+                    valid_nums.remove(self.board[i][j])
+        
+        return valid_nums
+    
+    def _calculate_degree(self, row: int, col: int) -> int:
+        """Calculate the degree of a cell (number of empty cells in same row/col/box)"""
+        degree = 0
+        
+        # Count empty cells in row
+        for j in range(9):
+            if self.board[row][j] == 0 and j != col:
+                degree += 1
+        
+        # Count empty cells in column
+        for i in range(9):
+            if self.board[i][col] == 0 and i != row:
+                degree += 1
+        
+        # Count empty cells in box
+        box_row, box_col = row // 3 * 3, col // 3 * 3
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                if self.board[i][j] == 0 and (i != row or j != col):
+                    degree += 1
+        
+        return degree
+    
+    def _get_next_cell(self) -> Optional[Tuple[int, int]]:
+        """Get the next cell to fill using heuristics"""
+        min_options = float('inf')
+        max_degree = -1
+        candidates = []
+        
+        for i in range(9):
+            for j in range(9):
+                if self.board[i][j] == 0:
+                    num_options = len(self.options[i][j].options)
+                    degree = self.options[i][j].degree
+                    
+                    if num_options < min_options or (num_options == min_options and degree > max_degree):
+                        min_options = num_options
+                        max_degree = degree
+                        candidates = [(i, j)]
+                    elif num_options == min_options and degree == max_degree:
+                        candidates.append((i, j))
+        
+        return random.choice(candidates) if candidates else None
+    
+    def _get_next_value(self, row: int, col: int) -> Optional[int]:
+        """Get the next value to try using heuristics"""
+        if not self.options[row][col].options:
+            return None
+            
+        # Calculate constraining count for each option
+        constraining_counts = defaultdict(int)
+        for num in self.options[row][col].options:
+            # Count how many other cells would be constrained by this number
+            for i in range(9):
+                if i != col and self.board[row][i] == 0:
+                    if num in self.options[row][i].options:
+                        constraining_counts[num] += 1
+                if i != row and self.board[i][col] == 0:
+                    if num in self.options[i][col].options:
+                        constraining_counts[num] += 1
+            
+            # Check box
+            box_row, box_col = row // 3 * 3, col // 3 * 3
+            for i in range(box_row, box_row + 3):
+                for j in range(box_col, box_col + 3):
+                    if (i != row or j != col) and self.board[i][j] == 0:
+                        if num in self.options[i][j].options:
+                            constraining_counts[num] += 1
+        
+        # If no constraints were found, just return any valid option
+        if not constraining_counts:
+            return random.choice(list(self.options[row][col].options))
+            
+        # Choose the value that constrains the fewest other cells
+        min_constraints = min(constraining_counts.values())
+        candidates = [num for num, count in constraining_counts.items() if count == min_constraints]
+        return random.choice(candidates)
+    
+    def _update_options(self, row: int, col: int, num: int) -> None:
+        """Update the options for all affected cells after placing a number"""
+        # Update row
+        for j in range(9):
+            if self.board[row][j] == 0:
+                self.options[row][j].options.discard(num)
+                self.options[row][j].degree -= 1
+        
+        # Update column
+        for i in range(9):
+            if self.board[i][col] == 0:
+                self.options[i][col].options.discard(num)
+                self.options[i][col].degree -= 1
+        
+        # Update box
+        box_row, box_col = row // 3 * 3, col // 3 * 3
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                if self.board[i][j] == 0:
+                    self.options[i][j].options.discard(num)
+                    self.options[i][j].degree -= 1
+    
+    def _restore_options(self, row: int, col: int, num: int) -> None:
+        """Restore the options for all affected cells after backtracking"""
+        # Restore row
+        for j in range(9):
+            if self.board[row][j] == 0:
+                if self._is_valid(row, j, num):
+                    self.options[row][j].options.add(num)
+                self.options[row][j].degree += 1
+        
+        # Restore column
+        for i in range(9):
+            if self.board[i][col] == 0:
+                if self._is_valid(i, col, num):
+                    self.options[i][col].options.add(num)
+                self.options[i][col].degree += 1
+        
+        # Restore box
+        box_row, box_col = row // 3 * 3, col // 3 * 3
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                if self.board[i][j] == 0:
+                    if self._is_valid(i, j, num):
+                        self.options[i][j].options.add(num)
+                    self.options[i][j].degree += 1
+    
+    def _is_valid(self, row: int, col: int, num: int) -> bool:
+        """Check if a number can be placed in the given cell"""
+        # Check row
+        for j in range(9):
+            if self.board[row][j] == num:
                 return False
-
-    return True
-
-def solve(bo):
-    '''
-    Solves the sudoku board bo
-
-    Effects: mutates bo
-
-    solve: (listof (listof Nat)) -> Bool
-
-    Time: O(1) since there are 9 options for a maximum of 81 unassigned numbers
-    '''
-    find = find_empty(bo)
-    if not find:
+        
+        # Check column
+        for i in range(9):
+            if self.board[i][col] == num:
+                return False
+        
+        # Check box
+        box_row, box_col = row // 3 * 3, col // 3 * 3
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                if self.board[i][j] == num:
+                    return False
+        
         return True
-
-    row, col = find
-    for num in range(1, 10):
-        if valid(bo, num, (row, col)):
-            bo[row][col] = num
-            if solve(bo):
+    
+    def solve(self) -> bool:
+        """Solve the Sudoku puzzle using backtracking with forward checking and heuristics"""
+        cell = self._get_next_cell()
+        if not cell:
+            return True
+        
+        row, col = cell
+        while True:
+            num = self._get_next_value(row, col)
+            if num is None:
+                break
+                
+            self.board[row][col] = num
+            self._update_options(row, col, num)
+            
+            if self.solve():
                 return True
+            
+            self.board[row][col] = 0
+            self._restore_options(row, col, num)
+            self.options[row][col].options.remove(num)
+        
+        return False
 
-    bo[row][col] = 0
-    return False
+def solve(board: List[List[int]]) -> bool:
+    """
+    Solve the Sudoku board using optimized backtracking with forward checking and heuristics.
+    
+    Args:
+        board: A 9x9 grid representing the Sudoku board (0 for empty cells)
+    
+    Returns:
+        bool: True if a solution was found, False otherwise
+    
+    Effects:
+        Mutates the input board with the solution if one exists
+    """
+    solver = SudokuSolver(board)
+    return solver.solve()
