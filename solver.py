@@ -1,7 +1,7 @@
 ## This module provides functions that solve a sudoku board using optimized algorithms
 ## including backtracking, forward checking, and heuristics
 
-from typing import List, Tuple, Optional, Set
+from typing import List, Tuple, Optional, Set, Iterator
 import random
 from dataclasses import dataclass
 from collections import defaultdict
@@ -11,6 +11,17 @@ class CellOptions:
     """Represents the valid options for a cell and its degree (number of empty cells in same row/col/box)"""
     options: Set[int]
     degree: int = 0
+
+@dataclass
+class SolveStep:
+    """Represents a single step in the solving process"""
+    row: int
+    col: int
+    value: int
+    step_type: str  # "attempt", "success", "backtrack"
+    remaining_options: Set[int]  # Shows forward checking
+    degree: int  # Shows degree heuristic
+    constraining_count: int  # Shows least constraining value
 
 class SudokuSolver:
     def __init__(self, board: List[List[int]]):
@@ -195,31 +206,60 @@ class SudokuSolver:
         
         return True
     
-    def solve(self) -> bool:
+    def solve(self) -> Iterator[SolveStep]:
         """Solve the Sudoku puzzle using backtracking with forward checking and heuristics"""
         cell = self._get_next_cell()
         if not cell:
-            return True
+            # We found a solution - yield a final success step with special type
+            yield SolveStep(0, 0, 0, "final", set(), 0, 0)  # Special final step type
+            return
         
         row, col = cell
         while True:
             num = self._get_next_value(row, col)
             if num is None:
                 break
-                
+            
+            # Calculate constraining count for visualization
+            constraining_count = sum(1 for i in range(9) for j in range(9)
+                                   if (i != row or j != col) and
+                                   self.board[i][j] == 0 and
+                                   num in self.options[i][j].options)
+            
+            # Yield attempt step
+            yield SolveStep(row, col, num, "attempt", 
+                          self.options[row][col].options.copy(),
+                          self.options[row][col].degree,
+                          constraining_count)
+            
             self.board[row][col] = num
             self._update_options(row, col, num)
             
-            if self.solve():
-                return True
+            # Collect all steps from recursive solve
+            solution_found = False
+            for step in self.solve():
+                yield step
+                if step.step_type in ["success", "final"]:
+                    solution_found = True
+            
+            if solution_found:
+                # Solution found in recursive call - yield success for this cell
+                yield SolveStep(row, col, num, "success", set(), 0, 0)
+                return
+            
+            # No solution found - backtrack
+            yield SolveStep(row, col, num, "backtrack", 
+                          self.options[row][col].options.copy(),
+                          self.options[row][col].degree,
+                          0)
             
             self.board[row][col] = 0
             self._restore_options(row, col, num)
             self.options[row][col].options.remove(num)
         
-        return False
+        return
 
-def solve(board: List[List[int]]) -> bool:
+def solve(board: List[List[int]]) -> Iterator[SolveStep]:
     """
     Solve the Sudoku board using optimized backtracking with forward checking and heuristics.
     
@@ -227,10 +267,13 @@ def solve(board: List[List[int]]) -> bool:
         board: A 9x9 grid representing the Sudoku board (0 for empty cells)
     
     Returns:
-        bool: True if a solution was found, False otherwise
+        Iterator[SolveStep]: Iterator yielding each step of the solving process
     
     Effects:
         Mutates the input board with the solution if one exists
     """
     solver = SudokuSolver(board)
-    return solver.solve()
+    result = solver.solve()
+    if isinstance(result, bool):
+        return iter([])  # Return empty iterator if result is boolean
+    return result  # Return the iterator of steps

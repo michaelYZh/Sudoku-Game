@@ -5,7 +5,7 @@ import time
 from typing import List, Optional, Tuple, Set
 from dataclasses import dataclass
 from generate import DIFFICULTY_MEDIUM, DIFFICULTY_EASY, DIFFICULTY_HARD, DIFFICULTY_EXPERT, generate_board
-from solver import solve
+from solver import solve, SolveStep
 from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, BG_COLOR, BOARD_SIZE,
     BORDER_THICK, BORDER_THIN, BORDER_COLOR,
@@ -78,6 +78,14 @@ class Board:
         self.difficulty = difficulty
         self.conflict_cells = []
         self.conflict_timer = None
+        self.animation_queue = []
+        self.animation_speed = {
+            "attempt": 100,  # ms - fast for attempts
+            "success": 50,   # ms - very fast for successful placements
+            "backtrack": 150 # ms - slightly slower for backtracking
+        }
+        self.current_step: Optional[SolveStep] = None
+        self.solving_text = ""
         
         # Create UI buttons with fixed size
         positions = Positions()
@@ -261,29 +269,73 @@ class Board:
         return True
 
     def solve(self) -> None:
-        """Solve the current board using the solver."""
+        """Solve the current board using the solver with animation."""
         # Clear selection before solving
         if self.box_selected:
             self.boxes[self.box_selected[0]][self.box_selected[1]].selected = False
             self.box_selected = None
         
         board = [[box.value for box in row] for row in self.boxes]
-        if solve(board):
-            # Animate the solution
+        self.state = GameState.SOLVING
+        
+        # Get all solving steps
+        try:
+            self.animation_queue = list(solve(board))
+            if self.animation_queue:
+                self._animate_next_step()
+            else:
+                self.state = GameState.ERROR
+        except StopIteration:
+            self.state = GameState.ERROR
+    
+    def _animate_next_step(self) -> None:
+        """Process the next step in the solving animation."""
+        if not self.animation_queue:
+            if self.state == GameState.SOLVING:
+                self.state = GameState.COMPLETED
+                # When completed, update all non-fixed cells to show as solved
+                for i in range(BOARD_SIZE):
+                    for j in range(BOARD_SIZE):
+                        if not self.boxes[i][j].fixed:
+                            self.boxes[i][j].highlighted = True
+            return
+        
+        self.current_step = self.animation_queue.pop(0)
+        
+        # Handle final success step
+        if self.current_step.step_type == "final":
+            self.state = GameState.COMPLETED
+            # Update all non-fixed cells to show as solved
             for i in range(BOARD_SIZE):
                 for j in range(BOARD_SIZE):
-                    if self.boxes[i][j].value != board[i][j]:
-                        self.boxes[i][j].value = board[i][j]
-                        self.boxes[i][j].draft.clear()
-                        # Redraw after each number placement
-                        self.draw(pygame.display.get_surface())
-                        pygame.display.flip()
-                        pygame.time.wait(50)  # 50ms delay between each number
-            
-            # Set state to completed
-            self.state = GameState.COMPLETED
-        else:
-            self.state = GameState.ERROR
+                    if not self.boxes[i][j].fixed:
+                        self.boxes[i][j].highlighted = True
+            self.solving_text = "Solution found!"
+            return
+        
+        row, col = self.current_step.row, self.current_step.col
+        
+        # Update the board based on step type
+        if self.current_step.step_type == "attempt":
+            self.boxes[row][col].value = self.current_step.value
+            self.boxes[row][col].highlighted = True
+            self.solving_text = f"Trying {self.current_step.value} at ({row+1},{col+1})"
+            pygame.time.set_timer(pygame.USEREVENT + 2, self.animation_speed["attempt"])
+        elif self.current_step.step_type == "success":
+            self.boxes[row][col].value = self.current_step.value
+            self.boxes[row][col].highlighted = True
+            self.solving_text = f"Placed {self.current_step.value} at ({row+1},{col+1})"
+            pygame.time.set_timer(pygame.USEREVENT + 2, self.animation_speed["success"])
+        else:  # backtrack
+            # Only clear the value if we're actually backtracking to try a different number
+            # Check if there are any success steps ahead for this cell
+            future_steps_for_cell = [step for step in self.animation_queue 
+                                   if step.row == row and step.col == col]
+            if not future_steps_for_cell:
+                self.boxes[row][col].value = 0
+                self.boxes[row][col].highlighted = False
+                self.solving_text = f"Backtracking from {self.current_step.value} at ({row+1},{col+1})"
+            pygame.time.set_timer(pygame.USEREVENT + 2, self.animation_speed["backtrack"])
     
     def sketch(self, value: int) -> None:
         """Add or remove a draft value in the selected box."""
@@ -350,24 +402,33 @@ class Board:
         x = self.start_x + col * CELL_SIZE
         y = self.start_y + row * CELL_SIZE
         
-        # Draw box background - always show solved background if state is completed
-        if self.state == GameState.COMPLETED:
-            pygame.draw.rect(screen, Colors.SOLVED_BG, (x, y, CELL_SIZE, CELL_SIZE))
-        else:
-            # Draw base background first
-            pygame.draw.rect(screen, BG_COLOR, (x, y, CELL_SIZE, CELL_SIZE))
-            
-            # Draw selection highlighting
-            if box.selected:
-                pygame.draw.rect(screen, Colors.SELECTED, (x, y, CELL_SIZE, CELL_SIZE))
-            elif box.highlighted:
-                pygame.draw.rect(screen, Colors.HIGHLIGHT, (x, y, CELL_SIZE, CELL_SIZE))
+        # Draw box background
+        pygame.draw.rect(screen, BG_COLOR, (x, y, CELL_SIZE, CELL_SIZE))
+        
+        # Draw solving animation highlights
+        if self.state == GameState.SOLVING:
+            if self.current_step and row == self.current_step.row and col == self.current_step.col:
+                if self.current_step.step_type == "attempt":
+                    pygame.draw.rect(screen, Colors.ATTEMPT, (x, y, CELL_SIZE, CELL_SIZE))
+                elif self.current_step.step_type == "success":
+                    pygame.draw.rect(screen, Colors.SOLVED_BG, (x, y, CELL_SIZE, CELL_SIZE))
+                elif self.current_step.step_type == "backtrack":
+                    pygame.draw.rect(screen, Colors.CONFLICT, (x, y, CELL_SIZE, CELL_SIZE))
+            elif box.highlighted:  # Show attempt/success highlight for other cells
+                pygame.draw.rect(screen, Colors.ATTEMPT, (x, y, CELL_SIZE, CELL_SIZE))
+        elif self.state == GameState.COMPLETED:
+            if not box.fixed:  # Only highlight non-fixed cells
+                pygame.draw.rect(screen, Colors.SOLVED_BG, (x, y, CELL_SIZE, CELL_SIZE))
+        elif box.selected:
+            pygame.draw.rect(screen, Colors.SELECTED, (x, y, CELL_SIZE, CELL_SIZE))
+        elif box.highlighted:
+            pygame.draw.rect(screen, Colors.HIGHLIGHT, (x, y, CELL_SIZE, CELL_SIZE))
         
         # Draw conflict highlighting
         if (row, col) in self.conflict_cells:
             pygame.draw.rect(screen, Colors.CONFLICT, (x, y, CELL_SIZE, CELL_SIZE))
         
-        # Draw value
+        # Always draw the value last, on top of any background
         if box.value != 0:
             color = Colors.FIXED if box.fixed else Colors.VALUE
             text = self.board_font.render(str(box.value), True, color)
@@ -420,13 +481,18 @@ class Board:
         incorrect_text = self.font.render(f"Mistakes: {self.incorrect_attempts}", True, Colors.INCORRECT)
         screen.blit(incorrect_text, Positions.MISTAKES)
         
-        # Draw "Solved!" message when completed
-        if self.state == GameState.COMPLETED:
-            solved_text = self.font.render("Solved!", True, Colors.PROGRESS)
+        # Draw solving status text during animation
+        if self.state == GameState.SOLVING and self.solving_text:
+            status_text = self.font.render(self.solving_text, True, Colors.TIME)
             # Calculate position to center between time and mistakes
-            solved_x = self.start_x + (self.width - solved_text.get_width()) // 2
-            solved_y = self.start_y + self.height + 15  # Same y-position as time and mistakes
-            screen.blit(solved_text, (solved_x, solved_y))
+            text_x = self.start_x + (self.width - status_text.get_width()) // 2
+            text_y = self.start_y + self.height + 15
+            screen.blit(status_text, (text_x, text_y))
+        elif self.state == GameState.COMPLETED:
+            solved_text = self.font.render("Solved!", True, Colors.PROGRESS)
+            text_x = self.start_x + (self.width - solved_text.get_width()) // 2
+            text_y = self.start_y + self.height + 15
+            screen.blit(solved_text, (text_x, text_y))
         elif self.state == GameState.ERROR:
             self._draw_error_message(screen)
     
@@ -472,11 +538,6 @@ def main():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     board.solve()
-                    if board.state == GameState.ERROR:
-                        # Show error message
-                        board.draw(screen)
-                        pygame.display.flip()
-                        pygame.time.wait(1000)  # Show error for 1 second
                 elif board.box_selected:  # Only check these keys if a cell is selected
                     if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5,
                                    pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9]:
@@ -488,6 +549,10 @@ def main():
                         board.try_place_draft()
                     elif event.key == pygame.K_BACKSPACE:
                         board.clear()
+            
+            # Handle animation timer
+            if event.type == pygame.USEREVENT + 2 and board.state == GameState.SOLVING:
+                board._animate_next_step()
             
             # Handle conflict timer
             if hasattr(event, 'type') and event.type == board.conflict_timer:

@@ -47,6 +47,7 @@ class Colors:
     RESULT = (100, 100, 100)
     CONFLICT = (255, 200, 200, 40)  # Light red for conflicting cells
     SOLVED_BG = (220, 255, 220, 40)  # Light green for solved board
+    ATTEMPT = (255, 255, 200, 40)  # Low saturation yellow for attempt
     
     # UI elements
     BUTTON_BG = (220, 220, 220)
