@@ -19,9 +19,6 @@ class SolveStep:
     col: int
     value: int
     step_type: str  # "attempt", "success", "backtrack"
-    remaining_options: Set[int]  # Shows forward checking
-    degree: int  # Shows degree heuristic
-    constraining_count: int  # Shows least constraining value
 
 class SudokuSolver:
     def __init__(self, board: List[List[int]]):
@@ -165,15 +162,13 @@ class SudokuSolver:
         # Restore row
         for j in range(9):
             if self.board[row][j] == 0:
-                if self._is_valid(row, j, num):
-                    self.options[row][j].options.add(num)
+                self.options[row][j].options.add(num)
                 self.options[row][j].degree += 1
         
         # Restore column
         for i in range(9):
             if self.board[i][col] == 0:
-                if self._is_valid(i, col, num):
-                    self.options[i][col].options.add(num)
+                self.options[i][col].options.add(num)
                 self.options[i][col].degree += 1
         
         # Restore box
@@ -181,8 +176,7 @@ class SudokuSolver:
         for i in range(box_row, box_row + 3):
             for j in range(box_col, box_col + 3):
                 if self.board[i][j] == 0:
-                    if self._is_valid(i, j, num):
-                        self.options[i][j].options.add(num)
+                    self.options[i][j].options.add(num)
                     self.options[i][j].degree += 1
     
     def _is_valid(self, row: int, col: int, num: int) -> bool:
@@ -210,51 +204,41 @@ class SudokuSolver:
         """Solve the Sudoku puzzle using backtracking with forward checking and heuristics"""
         cell = self._get_next_cell()
         if not cell:
-            # We found a solution - yield a final success step with special type
-            yield SolveStep(0, 0, 0, "final", set(), 0, 0)  # Special final step type
+            # We found a solution
+            yield SolveStep(0, 0, 0, "success")
             return
         
         row, col = cell
         while True:
             num = self._get_next_value(row, col)
             if num is None:
+                # No more options left for this cell, backtrack
+                yield SolveStep(row, col, 0, "backtrack")
                 break
-            
-            # Calculate constraining count for visualization
-            constraining_count = sum(1 for i in range(9) for j in range(9)
-                                   if (i != row or j != col) and
-                                   self.board[i][j] == 0 and
-                                   num in self.options[i][j].options)
-            
-            # Yield attempt step
-            yield SolveStep(row, col, num, "attempt", 
-                          self.options[row][col].options.copy(),
-                          self.options[row][col].degree,
-                          constraining_count)
-            
-            self.board[row][col] = num
-            self._update_options(row, col, num)
-            
-            # Collect all steps from recursive solve
-            solution_found = False
-            for step in self.solve():
-                yield step
-                if step.step_type in ["success", "final"]:
-                    solution_found = True
-            
-            if solution_found:
-                # Solution found in recursive call - yield success for this cell
-                yield SolveStep(row, col, num, "success", set(), 0, 0)
-                return
-            
-            # No solution found - backtrack
-            yield SolveStep(row, col, num, "backtrack", 
-                          self.options[row][col].options.copy(),
-                          self.options[row][col].degree,
-                          0)
-            
-            self.board[row][col] = 0
-            self._restore_options(row, col, num)
+
+            if self._is_valid(row, col, num):
+                # Yield attempt step
+                yield SolveStep(row, col, num, "attempt")
+
+                self.board[row][col] = num
+                self._update_options(row, col, num)
+                
+                # Collect all steps from recursive solve
+                solution_found = False
+                for step in self.solve():
+                    if step.step_type == "success":
+                        solution_found = True
+                    yield step
+                
+                if solution_found:
+                    # Solution found in recursive call - yield success for this cell
+                    yield SolveStep(row, col, 0, "success")
+                    return
+                
+                # No solution found - restore board state
+                self._restore_options(row, col, num)
+                self.board[row][col] = 0
+            # Remove the number from the cell's options
             self.options[row][col].options.remove(num)
         
         return

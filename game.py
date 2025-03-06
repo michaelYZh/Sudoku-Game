@@ -414,7 +414,7 @@ class Board:
                     pygame.draw.rect(screen, Colors.SOLVED_BG, (x, y, CELL_SIZE, CELL_SIZE))
                 elif self.current_step.step_type == "backtrack":
                     pygame.draw.rect(screen, Colors.CONFLICT, (x, y, CELL_SIZE, CELL_SIZE))
-            elif box.highlighted:  # Show attempt/success highlight for other cells
+            elif box.highlighted:  # Show attempt highlight for other cells
                 pygame.draw.rect(screen, Colors.ATTEMPT, (x, y, CELL_SIZE, CELL_SIZE))
         elif self.state == GameState.COMPLETED:
             if not box.fixed:  # Only highlight non-fixed cells
