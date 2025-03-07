@@ -25,6 +25,7 @@ class CellState(Enum):
     ATTEMPT = auto()     # Currently trying a number
     SUCCESS = auto()     # Part of the solution
     BACKTRACK = auto()   # Backtracking from this cell
+    CLEAR = auto()       # Clear any previous state
 
 @dataclass
 class Button:
@@ -335,6 +336,9 @@ class Board:
             self.boxes[row][col].state = CellState.SUCCESS
             self.solving_text = f"Placed {self.current_step.value} at ({row+1},{col+1})"
             pygame.time.set_timer(pygame.USEREVENT + 2, self.animation_speed["success"])
+        elif self.current_step.step_type == "clear":
+            self.boxes[row][col].state = CellState.NONE  # Reset to normal state
+            pygame.time.set_timer(pygame.USEREVENT + 2, self.animation_speed["backtrack"])  # Use backtrack timing
         else:  # backtrack
             self.boxes[row][col].value = 0
             self.boxes[row][col].state = CellState.BACKTRACK

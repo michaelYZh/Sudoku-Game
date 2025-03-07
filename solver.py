@@ -18,12 +18,13 @@ class SolveStep:
     row: int
     col: int
     value: int
-    step_type: str  # "attempt", "success", "backtrack"
+    step_type: str  # "attempt", "success", "backtrack", 
 
 class SudokuSolver:
     def __init__(self, board: List[List[int]]):
         self.board = board
         self.options = [[CellState(set()) for _ in range(9)] for _ in range(9)]
+        self.last_backtrack = None  # Track the last backtracked cell (row, col)
         self._initialize_state()
     
     def _initialize_state(self) -> None:
@@ -240,12 +241,18 @@ class SudokuSolver:
         
         row, col = cell
         while True:
+            # Clear any previous backtrack visualization before trying new numbers
+            if self.last_backtrack:
+                yield SolveStep(self.last_backtrack[0], self.last_backtrack[1], 0, "clear")
+                self.last_backtrack = None
+                
             num = self._get_next_value(row, col)
             print(f"Trying cell ({row},{col}) with number: {num}")  # Debug print
             if num is None:
                 # No more options left for this cell, backtrack
                 print(f"No more options for ({row},{col}), backtracking")  # Debug print
                 yield SolveStep(row, col, 0, "backtrack")
+                self.last_backtrack = (row, col)  # Remember this cell for clearing later
                 break
 
             if self._is_valid(row, col, num):
@@ -308,7 +315,6 @@ def solve(board: List[List[int]]) -> Iterator[SolveStep]:
     if isinstance(result, bool):
         return iter([])  # Return empty iterator if result is boolean
     return result  # Return the iterator of steps
-
 def _find_empty(board):
     """Find an empty cell in the board."""
     for i in range(len(board)):
