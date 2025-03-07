@@ -307,18 +307,10 @@ class Board:
     def _animate_next_step(self) -> None:
         """Process the next step in the solving animation."""
         if not self.animation_queue:
-            # Only mark completion if we're in solving state and all non-fixed cells are successful
+            # Only mark completion if we're in solving state
             if self.state == GameState.SOLVING:
-                all_solved = True
-                for i in range(BOARD_SIZE):
-                    for j in range(BOARD_SIZE):
-                        if not self.boxes[i][j].fixed and self.boxes[i][j].state != CellState.SUCCESS:
-                            all_solved = False
-                            break
-                    if not all_solved:
-                        break
-                
-                if all_solved:
+                # Check if the board is complete
+                if self.is_finished():
                     self.state = GameState.COMPLETED
                     self.solving_text = "Solved!"
             return
@@ -328,8 +320,13 @@ class Board:
         
         # Handle special success case (solution found)
         if self.current_step.step_type == "success" and row == -1 and col == -1:
-            # Don't change state yet, wait for success propagation
-            self.solving_text = "Solution found! Showing solution path..."
+            # Mark ALL non-fixed cells as successful when solution is found
+            for i in range(BOARD_SIZE):
+                for j in range(BOARD_SIZE):
+                    if not self.boxes[i][j].fixed:
+                        self.boxes[i][j].state = CellState.SUCCESS
+            self.state = GameState.COMPLETED
+            self.solving_text = "Solved!"
             return
         
         # Update the board based on step type
