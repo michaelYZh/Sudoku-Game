@@ -203,44 +203,52 @@ class SudokuSolver:
     def solve(self) -> Iterator[SolveStep]:
         """Solve the Sudoku puzzle using backtracking with forward checking and heuristics"""
         cell = self._get_next_cell()
+        print(f"Getting next cell: {cell}")  # Debug print
         if not cell:
             # We found a solution
-            yield SolveStep(0, 0, 0, "success")
+            print("No more cells - solution found!")  # Debug print
+            yield SolveStep(-1, -1, 0, "success")
             return
         
         row, col = cell
         while True:
             num = self._get_next_value(row, col)
+            print(f"Trying cell ({row},{col}) with number: {num}")  # Debug print
             if num is None:
                 # No more options left for this cell, backtrack
+                print(f"No more options for ({row},{col}), backtracking")  # Debug print
                 yield SolveStep(row, col, 0, "backtrack")
                 break
 
             if self._is_valid(row, col, num):
-                # Yield attempt step
+                # Try this number
                 yield SolveStep(row, col, num, "attempt")
-
+                
                 self.board[row][col] = num
                 self._update_options(row, col, num)
                 
-                # Collect all steps from recursive solve
+                # Try to solve the rest of the board
                 solution_found = False
+                print(f"Recursing after placing {num} at ({row},{col})")  # Debug print
                 for step in self.solve():
+                    yield step
                     if step.step_type == "success":
                         solution_found = True
-                    yield step
                 
                 if solution_found:
-                    # Solution found in recursive call - yield success for this cell
-                    yield SolveStep(row, col, 0, "success")
+                    print(f"Success propagated to ({row},{col}) with {num}")  # Debug print
+                    yield SolveStep(row, col, num, "success")
                     return
                 
-                # No solution found - restore board state
+                # If we get here, this number didn't work
+                print(f"Number {num} didn't work at ({row},{col}), restoring state")  # Debug print
                 self._restore_options(row, col, num)
                 self.board[row][col] = 0
+            
             # Remove the number from the cell's options
             self.options[row][col].options.remove(num)
         
+        print(f"No solution found for ({row},{col})")  # Debug print
         return
 
 def solve(board: List[List[int]]) -> Iterator[SolveStep]:
@@ -261,3 +269,33 @@ def solve(board: List[List[int]]) -> Iterator[SolveStep]:
     if isinstance(result, bool):
         return iter([])  # Return empty iterator if result is boolean
     return result  # Return the iterator of steps
+
+def _find_empty(board):
+    """Find an empty cell in the board."""
+    for i in range(len(board)):
+        for j in range(len(board[0])):
+            if board[i][j] == 0:
+                return (i, j)
+    return None
+
+def _is_valid(board, row, col, num):
+    """Check if a number is valid in a cell."""
+    # Check row
+    for x in range(len(board[0])):
+        if board[row][x] == num:
+            return False
+    
+    # Check column
+    for x in range(len(board)):
+        if board[x][col] == num:
+            return False
+    
+    # Check box
+    box_x = row // 3 * 3
+    box_y = col // 3 * 3
+    for i in range(3):
+        for j in range(3):
+            if board[box_x + i][box_y + j] == num:
+                return False
+    
+    return True

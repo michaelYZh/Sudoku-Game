@@ -2,7 +2,7 @@
 
 import pygame
 import time
-from typing import List, Optional, Tuple, Set
+from typing import List, Optional, Tuple
 from dataclasses import dataclass
 from generate import DIFFICULTY_MEDIUM, DIFFICULTY_EASY, DIFFICULTY_HARD, DIFFICULTY_EXPERT, generate_board
 from solver import solve, SolveStep
@@ -16,6 +16,15 @@ from config import (
     BOARD_START_Y, CELL_SIZE, BOARD_WIDTH, BOARD_HEIGHT,
     BUTTON_WIDTH, BUTTON_HEIGHT, BOARD_FONT_SIZE
 )
+from enum import Enum, auto
+
+class CellState(Enum):
+    """Represents the visual state of a cell."""
+    NONE = auto()        # Normal state
+    SELECTED = auto()    # User selected this cell
+    ATTEMPT = auto()     # Currently trying a number
+    SUCCESS = auto()     # Part of the solution
+    BACKTRACK = auto()   # Backtracking from this cell
 
 @dataclass
 class Button:
@@ -54,9 +63,8 @@ class Box:
     col: int
     value: int
     fixed: bool
-    draft: Set[int]
-    selected: bool
-    highlighted: bool = False
+    draft: Optional[int]  # None means no draft value
+    state: CellState = CellState.NONE
 
 class Board:
     """Manages the Sudoku game board and its state."""
@@ -106,7 +114,7 @@ class Board:
                 row = []
                 for j in range(BOARD_SIZE):
                     value = board[i][j]
-                    row.append(Box(i, j, value, value != 0, set(), False))
+                    row.append(Box(i, j, value, value != 0, None, CellState.NONE))
                 boxes.append(row)
             return boxes
         except Exception as e:
@@ -164,9 +172,9 @@ class Board:
             
         self._start_timer_if_not_started()  # Start timer on first selection
         if self.box_selected:
-            self.boxes[self.box_selected[0]][self.box_selected[1]].selected = False
+            self.boxes[self.box_selected[0]][self.box_selected[1]].state = CellState.NONE
         self.box_selected = (row, col)
-        self.boxes[row][col].selected = True
+        self.boxes[row][col].state = CellState.SELECTED
     
     def click(self, pos: Tuple[int, int]) -> Optional[Tuple[int, int]]:
         """Handle a click event and return the clicked position if valid."""
@@ -214,7 +222,7 @@ class Board:
             
             if self._is_valid_placement(row, col, value):
                 box.value = value
-                box.draft.clear()
+                box.draft = None
                 return True
             else:
                 # Find and highlight conflicting cells
@@ -227,7 +235,7 @@ class Board:
                 
                 # Invalid placement - increment mistakes and reset selection
                 self.incorrect_attempts += 1
-                box.selected = False
+                box.state = CellState.NONE
                 self.box_selected = None
                 return False
         return False
@@ -236,7 +244,7 @@ class Board:
         """Clear the selected box."""
         if self.box_selected and not self.boxes[self.box_selected[0]][self.box_selected[1]].fixed:
             self.boxes[self.box_selected[0]][self.box_selected[1]].value = 0
-            self.boxes[self.box_selected[0]][self.box_selected[1]].draft.clear()
+            self.boxes[self.box_selected[0]][self.box_selected[1]].draft = None
     
     def _is_valid_placement(self, row: int, col: int, value: int) -> bool:
         """Check if a value can be placed at the given position."""
@@ -272,7 +280,7 @@ class Board:
         """Solve the current board using the solver with animation."""
         # Clear selection before solving
         if self.box_selected:
-            self.boxes[self.box_selected[0]][self.box_selected[1]].selected = False
+            self.boxes[self.box_selected[0]][self.box_selected[1]].state = CellState.NONE
             self.box_selected = None
         
         board = [[box.value for box in row] for row in self.boxes]
@@ -291,50 +299,46 @@ class Board:
     def _animate_next_step(self) -> None:
         """Process the next step in the solving animation."""
         if not self.animation_queue:
+            # Only mark completion if we're in solving state and all non-fixed cells are successful
             if self.state == GameState.SOLVING:
-                self.state = GameState.COMPLETED
-                # When completed, update all non-fixed cells to show as solved
+                all_solved = True
                 for i in range(BOARD_SIZE):
                     for j in range(BOARD_SIZE):
-                        if not self.boxes[i][j].fixed:
-                            self.boxes[i][j].highlighted = True
+                        if not self.boxes[i][j].fixed and self.boxes[i][j].state != CellState.SUCCESS:
+                            all_solved = False
+                            break
+                    if not all_solved:
+                        break
+                
+                if all_solved:
+                    self.state = GameState.COMPLETED
+                    self.solving_text = "Solved!"
             return
         
         self.current_step = self.animation_queue.pop(0)
-        
-        # Handle final success step
-        if self.current_step.step_type == "final":
-            self.state = GameState.COMPLETED
-            # Update all non-fixed cells to show as solved
-            for i in range(BOARD_SIZE):
-                for j in range(BOARD_SIZE):
-                    if not self.boxes[i][j].fixed:
-                        self.boxes[i][j].highlighted = True
-            self.solving_text = "Solution found!"
-            return
-        
         row, col = self.current_step.row, self.current_step.col
+        
+        # Handle special success case (solution found)
+        if self.current_step.step_type == "success" and row == -1 and col == -1:
+            # Don't change state yet, wait for success propagation
+            self.solving_text = "Solution found! Showing solution path..."
+            return
         
         # Update the board based on step type
         if self.current_step.step_type == "attempt":
             self.boxes[row][col].value = self.current_step.value
-            self.boxes[row][col].highlighted = True
+            self.boxes[row][col].state = CellState.ATTEMPT
             self.solving_text = f"Trying {self.current_step.value} at ({row+1},{col+1})"
             pygame.time.set_timer(pygame.USEREVENT + 2, self.animation_speed["attempt"])
         elif self.current_step.step_type == "success":
-            self.boxes[row][col].value = self.current_step.value
-            self.boxes[row][col].highlighted = True
+            self.boxes[row][col].value = self.current_step.value  # Keep the successful value
+            self.boxes[row][col].state = CellState.SUCCESS
             self.solving_text = f"Placed {self.current_step.value} at ({row+1},{col+1})"
             pygame.time.set_timer(pygame.USEREVENT + 2, self.animation_speed["success"])
         else:  # backtrack
-            # Only clear the value if we're actually backtracking to try a different number
-            # Check if there are any success steps ahead for this cell
-            future_steps_for_cell = [step for step in self.animation_queue 
-                                   if step.row == row and step.col == col]
-            if not future_steps_for_cell:
-                self.boxes[row][col].value = 0
-                self.boxes[row][col].highlighted = False
-                self.solving_text = f"Backtracking from {self.current_step.value} at ({row+1},{col+1})"
+            self.boxes[row][col].value = 0
+            self.boxes[row][col].state = CellState.BACKTRACK
+            self.solving_text = f"Backtracking from ({row+1},{col+1})"
             pygame.time.set_timer(pygame.USEREVENT + 2, self.animation_speed["backtrack"])
     
     def sketch(self, value: int) -> None:
@@ -345,24 +349,21 @@ class Board:
             box.value = 0
             
             # If clicking the same number that's already drafted, remove it
-            if value in box.draft:
-                box.draft.clear()
+            if box.draft == value:
+                box.draft = None
             else:
                 # Replace any existing draft with the new number
-                box.draft.clear()
-                box.draft.add(value)
+                box.draft = value
     
     def try_place_draft(self) -> None:
-        """Try to place the first draft number in the selected cell."""
+        """Try to place the draft number in the selected cell."""
         if self.box_selected:
             row, col = self.box_selected
             box = self.boxes[row][col]
-            if box.draft:
-                # Get the first draft number and try to place it
-                num = min(box.draft)
-                if not self.place_number(num):
-                    # If placement fails, clear drafts
-                    box.draft.clear()
+            if box.draft is not None:
+                if not self.place_number(box.draft):
+                    # If placement fails, clear draft
+                    box.draft = None
     
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the board and its state on the screen."""
@@ -405,24 +406,19 @@ class Board:
         # Draw box background
         pygame.draw.rect(screen, BG_COLOR, (x, y, CELL_SIZE, CELL_SIZE))
         
-        # Draw solving animation highlights
+        # Draw cell state background
         if self.state == GameState.SOLVING:
-            if self.current_step and row == self.current_step.row and col == self.current_step.col:
-                if self.current_step.step_type == "attempt":
-                    pygame.draw.rect(screen, Colors.ATTEMPT, (x, y, CELL_SIZE, CELL_SIZE))
-                elif self.current_step.step_type == "success":
-                    pygame.draw.rect(screen, Colors.SOLVED_BG, (x, y, CELL_SIZE, CELL_SIZE))
-                elif self.current_step.step_type == "backtrack":
-                    pygame.draw.rect(screen, Colors.CONFLICT, (x, y, CELL_SIZE, CELL_SIZE))
-            elif box.highlighted:  # Show attempt highlight for other cells
+            if box.state == CellState.ATTEMPT:
                 pygame.draw.rect(screen, Colors.ATTEMPT, (x, y, CELL_SIZE, CELL_SIZE))
-        elif self.state == GameState.COMPLETED:
-            if not box.fixed:  # Only highlight non-fixed cells
+            elif box.state == CellState.SUCCESS:
                 pygame.draw.rect(screen, Colors.SOLVED_BG, (x, y, CELL_SIZE, CELL_SIZE))
-        elif box.selected:
+            elif box.state == CellState.BACKTRACK:
+                pygame.draw.rect(screen, Colors.CONFLICT, (x, y, CELL_SIZE, CELL_SIZE))
+        elif self.state == GameState.COMPLETED:
+            # Show all cells in green when completed
+            pygame.draw.rect(screen, Colors.SOLVED_BG, (x, y, CELL_SIZE, CELL_SIZE))
+        elif box.state == CellState.SELECTED:
             pygame.draw.rect(screen, Colors.SELECTED, (x, y, CELL_SIZE, CELL_SIZE))
-        elif box.highlighted:
-            pygame.draw.rect(screen, Colors.HIGHLIGHT, (x, y, CELL_SIZE, CELL_SIZE))
         
         # Draw conflict highlighting
         if (row, col) in self.conflict_cells:
@@ -435,11 +431,10 @@ class Board:
             screen.blit(text, (x + (CELL_SIZE - text.get_width()) / 2,
                               y + (CELL_SIZE - text.get_height()) / 2))
         
-        # Draw draft numbers
-        for i, num in enumerate(sorted(box.draft)):
-            text = self.small_font.render(str(num), True, Colors.DRAFT)
-            screen.blit(text, (x + (i % 3) * (CELL_SIZE / 3) + DRAFT_SHIFT,
-                              y + (i // 3) * (CELL_SIZE / 3) + DRAFT_SHIFT))
+        # Draw draft number
+        if box.draft is not None:
+            text = self.small_font.render(str(box.draft), True, Colors.DRAFT)
+            screen.blit(text, (x + DRAFT_SHIFT, y + DRAFT_SHIFT))
     
     def _draw_borders(self, screen: pygame.Surface) -> None:
         """Draw the board borders."""
