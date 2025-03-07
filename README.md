@@ -11,6 +11,9 @@ A modern, feature-rich Sudoku game with an optimized solver and clean Python imp
 - ⏱️ Timer and mistake counter
 - 🎨 Modern UI with clear visual feedback
 - ⌨️ Keyboard shortcuts for quick actions
+- 🔄 Visual backtracking animation for solver
+- 🎨 Enhanced state management with enums
+- ✨ Optimized cell state handling
 
 ## Installation
 
@@ -35,7 +38,7 @@ pip install -r requirements.txt
 
 Run the game:
 ```bash
-python sudoku.py
+python game.py
 ```
 
 ### Controls
@@ -56,17 +59,26 @@ python sudoku.py
 
 ## Project Structure
 
-- `sudoku.py`: Main game module with GUI implementation
+- `game.py`: Main game module with GUI implementation
 - `solver.py`: Optimized Sudoku solver with multiple strategies
 - `generate.py`: Puzzle generator with configurable difficulty
 - `config.py`: Game configuration and constants
+- `requirements.txt`: Project dependencies
+- `.gitignore`: Git ignore rules
+- `LICENSE`: MIT License
 
 ## Technical Details
 
 The solver uses three optimization techniques:
-1. Backtracking: Systematic search for solutions
+1. Backtracking: Systematic search for solutions with visual animation
 2. Forward Checking: Early detection of invalid states
 3. Heuristics: Smart cell and value selection
+
+Recent improvements include:
+- Enhanced state management using enums for cell states
+- Optimized draft number handling
+- Improved solver visualization with clear backtracking
+- Better code organization and maintainability
 
 ## Contributing
 
