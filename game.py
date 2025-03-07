@@ -10,8 +10,7 @@ from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, BG_COLOR, BOARD_SIZE,
     BORDER_THICK, BORDER_THIN, BORDER_COLOR,
     Colors, Positions, FONT_SIZE, SMALL_FONT_SIZE,
-    SYSTEM_FONT, DRAFT_SHIFT, SOLVE_PAUSE_TIME,
-    END_GAME_DELAY, GameState, Difficulty, BUTTON_PADDING,
+    SYSTEM_FONT, DRAFT_SHIFT, GameState, Difficulty, BUTTON_PADDING,
     BUTTON_BORDER_RADIUS, BUTTON_FONT_SIZE, BOARD_START_X,
     BOARD_START_Y, CELL_SIZE, BOARD_WIDTH, BOARD_HEIGHT,
     BUTTON_WIDTH, BUTTON_HEIGHT, BOARD_FONT_SIZE
@@ -224,6 +223,14 @@ class Board:
             if self._is_valid_placement(row, col, value):
                 box.value = value
                 box.draft = None
+                # Check if the board is now complete (only for manual solving)
+                if self.state == GameState.PLAYING and self.is_finished():
+                    self.state = GameState.COMPLETED
+                    # Mark all non-fixed cells as successful immediately for manual completion
+                    for i in range(BOARD_SIZE):
+                        for j in range(BOARD_SIZE):
+                            if not self.boxes[i][j].fixed:
+                                self.boxes[i][j].state = CellState.SUCCESS
                 return True
             else:
                 # Find and highlight conflicting cells
