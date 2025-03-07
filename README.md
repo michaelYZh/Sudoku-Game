@@ -12,8 +12,6 @@ A modern, feature-rich Sudoku game with an optimized solver and clean Python imp
 - 🎨 Modern UI with clear visual feedback
 - ⌨️ Keyboard shortcuts for quick actions
 - 🔄 Visual backtracking animation for solver
-- 🎨 Enhanced state management with enums
-- ✨ Optimized cell state handling
 
 ## Installation
 
@@ -73,12 +71,6 @@ The solver uses three optimization techniques:
 1. Backtracking: Systematic search for solutions with visual animation
 2. Forward Checking: Early detection of invalid states
 3. Heuristics: Smart cell and value selection
-
-Recent improvements include:
-- Enhanced state management using enums for cell states
-- Optimized draft number handling
-- Improved solver visualization with clear backtracking
-- Better code organization and maintainability
 
 ## Contributing
 
