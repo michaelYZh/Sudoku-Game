@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from collections import defaultdict
 
 @dataclass
-class CellOptions:
+class CellState:
     """Represents the valid options for a cell and its degree (number of empty cells in same row/col/box)"""
     options: Set[int]
-    degree: int = 0
+    degree: int = -1
 
 @dataclass
 class SolveStep:
@@ -23,11 +23,11 @@ class SolveStep:
 class SudokuSolver:
     def __init__(self, board: List[List[int]]):
         self.board = board
-        self.options = [[CellOptions(set()) for _ in range(9)] for _ in range(9)]
-        self._initialize_options()
+        self.options = [[CellState(set()) for _ in range(9)] for _ in range(9)]
+        self._initialize_state()
     
-    def _initialize_options(self) -> None:
-        """Initialize valid options for each empty cell"""
+    def _initialize_state(self) -> None:
+        """Initialize valid options and degree for each empty cell"""
         for i in range(9):
             for j in range(9):
                 if self.board[i][j] == 0:
@@ -35,7 +35,7 @@ class SudokuSolver:
                     self.options[i][j].degree = self._calculate_degree(i, j)
     
     def _get_valid_options(self, row: int, col: int) -> Set[int]:
-        """Get all valid numbers that can be placed in the given cell"""
+        """Get all valid numbers that can be placed in the given empty cell"""
         valid_nums = set(range(1, 10))
         
         # Check row
@@ -58,7 +58,7 @@ class SudokuSolver:
         return valid_nums
     
     def _calculate_degree(self, row: int, col: int) -> int:
-        """Calculate the degree of a cell (number of empty cells in same row/col/box)"""
+        """Calculate the degree of a an empty cell (number of empty cells in same row/col/box)"""
         degree = 0
         
         # Count empty cells in row
@@ -81,8 +81,14 @@ class SudokuSolver:
         return degree
     
     def _get_next_cell(self) -> Optional[Tuple[int, int]]:
-        """Get the next cell to fill using heuristics"""
-        min_options = float('inf')
+        """Get the next empty cell to fill using the Minimum Remaining Values (MRV) heuristic
+        with Degree heuristic as a tie-breaker.
+        
+        MRV: Choose the cell with fewest valid options left
+        Degree: Among cells with same number of options, choose the one that affects the most unfilled cells
+        If multiple cells tie on both criteria, choose randomly among them.
+        """
+        min_options = 10  # Maximum possible options in Sudoku is 9
         max_degree = -1
         candidates = []
         
@@ -102,7 +108,14 @@ class SudokuSolver:
         return random.choice(candidates) if candidates else None
     
     def _get_next_value(self, row: int, col: int) -> Optional[int]:
-        """Get the next value to try using heuristics"""
+        """Get the next value to try using the Least Constraining Value heuristic.
+        
+        For each possible value, count how many options would be eliminated from other empty cells
+        if this value were placed. Choose the value that constrains (eliminates options from) the
+        fewest other cells. If multiple values tie, choose randomly among them.
+        
+        Returns None if no valid options remain for this cell.
+        """
         if not self.options[row][col].options:
             return None
             
@@ -135,19 +148,30 @@ class SudokuSolver:
         candidates = [num for num, count in constraining_counts.items() if count == min_constraints]
         return random.choice(candidates)
     
-    def _update_options(self, row: int, col: int, num: int) -> None:
-        """Update the options for all affected cells after placing a number"""
+    def _update_cell_options(self, row: int, col: int, num: int) -> bool:
+        """Remove the placed number from options of all affected empty cells and
+        set the current cell's options to invalid state (empty set).
+        
+        Returns:
+            bool: True if all affected cells still have at least one option,
+                 False if any cell is left with no options
+        """
+        # Set current cell to invalid state (like initial filled cells)
+        self.options[row][col].options = set()
+        
         # Update row
         for j in range(9):
             if self.board[row][j] == 0:
                 self.options[row][j].options.discard(num)
-                self.options[row][j].degree -= 1
+                if not self.options[row][j].options:
+                    return False
         
         # Update column
         for i in range(9):
             if self.board[i][col] == 0:
                 self.options[i][col].options.discard(num)
-                self.options[i][col].degree -= 1
+                if not self.options[i][col].options:
+                    return False
         
         # Update box
         box_row, box_col = row // 3 * 3, col // 3 * 3
@@ -155,30 +179,34 @@ class SudokuSolver:
             for j in range(box_col, box_col + 3):
                 if self.board[i][j] == 0:
                     self.options[i][j].options.discard(num)
-                    self.options[i][j].degree -= 1
-    
-    def _restore_options(self, row: int, col: int, num: int) -> None:
-        """Restore the options for all affected cells after backtracking"""
-        # Restore row
+                    if not self.options[i][j].options:
+                        return False
+        
+        return True
+
+    def _update_cell_degrees(self, row: int, col: int) -> None:
+        """Decrease the degree of all affected empty cells after filling a cell
+        and set the current cell's degree to invalid state (-1)"""
+        # Set current cell to invalid state (like initial filled cells)
+        self.options[row][col].degree = -1
+        
+        # Update row
         for j in range(9):
-            if self.board[row][j] == 0:
-                self.options[row][j].options.add(num)
-                self.options[row][j].degree += 1
+            if self.board[row][j] == 0 and self.options[row][j].degree >= 0:
+                self.options[row][j].degree -= 1
         
-        # Restore column
+        # Update column
         for i in range(9):
-            if self.board[i][col] == 0:
-                self.options[i][col].options.add(num)
-                self.options[i][col].degree += 1
+            if self.board[i][col] == 0 and self.options[i][col].degree >= 0:
+                self.options[i][col].degree -= 1
         
-        # Restore box
+        # Update box
         box_row, box_col = row // 3 * 3, col // 3 * 3
         for i in range(box_row, box_row + 3):
             for j in range(box_col, box_col + 3):
-                if self.board[i][j] == 0:
-                    self.options[i][j].options.add(num)
-                    self.options[i][j].degree += 1
-    
+                if self.board[i][j] == 0 and self.options[i][j].degree >= 0:
+                    self.options[i][j].degree -= 1
+
     def _is_valid(self, row: int, col: int, num: int) -> bool:
         """Check if a number can be placed in the given cell"""
         # Check row
@@ -224,28 +252,39 @@ class SudokuSolver:
                 # Try this number
                 yield SolveStep(row, col, num, "attempt")
                 
+                # Backup current state
+                curr_cell_options = self.options[row][col].options.copy()
+                curr_cell_degree = self.options[row][col].degree
+                global_cell_options = [[CellState(cell.options.copy(), cell.degree) for cell in row] 
+                                    for row in self.options]
+                
+                # Set new state
                 self.board[row][col] = num
-                self._update_options(row, col, num)
-                
-                # Try to solve the rest of the board
-                solution_found = False
-                print(f"Recursing after placing {num} at ({row},{col})")  # Debug print
-                for step in self.solve():
-                    yield step
-                    if step.step_type == "success":
-                        solution_found = True
-                
-                if solution_found:
-                    print(f"Success propagated to ({row},{col}) with {num}")  # Debug print
-                    yield SolveStep(row, col, num, "success")
-                    return
+                if self._update_cell_options(row, col, num):
+                    self._update_cell_degrees(row, col)
+                    
+                    # Try to solve the rest of the board
+                    solution_found = False
+                    print(f"Recursing after placing {num} at ({row},{col})")  # Debug print
+                    for step in self.solve():
+                        yield step
+                        if step.step_type == "success":
+                            solution_found = True
+                    
+                    if solution_found:
+                        print(f"Success propagated to ({row},{col}) with {num}")  # Debug print
+                        yield SolveStep(row, col, num, "success")
+                        return
                 
                 # If we get here, this number didn't work
                 print(f"Number {num} didn't work at ({row},{col}), restoring state")  # Debug print
-                self._restore_options(row, col, num)
                 self.board[row][col] = 0
+                # Restore state from backup
+                self.options = global_cell_options
+                self.options[row][col].options = curr_cell_options
+                self.options[row][col].degree = curr_cell_degree
             
-            # Remove the number from the cell's options
+            # Remove the number from options since it didn't lead to a solution
             self.options[row][col].options.remove(num)
         
         print(f"No solution found for ({row},{col})")  # Debug print

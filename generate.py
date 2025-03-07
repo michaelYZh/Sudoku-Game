@@ -30,10 +30,18 @@ def generate_board(difficulty: float = DIFFICULTY_MEDIUM) -> List[List[int]]:
     # Add some randomness to the seed to ensure different boards
     random.seed()
     seed = random.randint(1, 1000000)
-    print(f"Generating board with seed {seed} and difficulty {difficulty}")
+    print(f"\nGenerating board with seed {seed} and difficulty {difficulty}")
     
     # Generate puzzle with specified difficulty
     puzzle = Sudoku(3, seed=seed).difficulty(difficulty)  # 3x3 blocks = 9x9 grid
+    
+    print("\nGenerated puzzle:")
+    puzzle.show()
+    
+    # Verify solvability and show solution
+    solution = puzzle.solve()
+    print("\nSolution:")
+    solution.show()
     
     # Convert puzzle to our format (list of lists with 0 for empty cells)
     board = []
